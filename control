@@ -1,0 +1,8 @@
+Package: elm
+Version: 0.19-1
+Architecture: ARCH
+Maintainer: Leonardo Taglialegne <cmt.miniBill@gmail.com>
+Description: A delightful language for reliable webapps.
+Section: web
+Priority: optional
+Homepage: https://elm-lang.org
