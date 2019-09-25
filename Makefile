@@ -6,39 +6,53 @@ LIN32V19="https://github.com/elm/compiler/releases/download/0.19.0/binaries-for-
 SHA32="7a82bbf34955960d9806417f300e7b2f8d426933c09863797fe83b67063e0139"
 
 .PHONY: all
-all: build/elm_0.19-1-i386.deb build/elm_0.19-1-amd64.deb
+all: output/elm_0.19-1-i386.deb output/elm_0.19-1-amd64.deb
 
-build/amd64/original.gz:
-	mkdir -p $(shell dirname $@)
+orig/amd64.gz:
+	@mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN64V19} -o $@
 	sha256sum --check amd64.sha256sum || rm $@
 
-build/i386/original.gz:
-	mkdir -p $(shell dirname $@)
+orig/i386.gz:
+	@mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN32V19} -o $@
 	sha256sum --check i386.sha256sum || rm $@
 
-build/%/data/usr/bin/elm: build/%/original.gz
-	mkdir -p $(shell dirname $@)
+.SECONDARY: build/%/usr/bin/elm
+build/%/usr/bin/elm: orig/%.gz
+	@mkdir -p $(shell dirname $@)
 	gunzip < $^ > $@
 	chmod +x $@
 
+.SECONDARY: build/i386/control
 build/i386/control: control
-	mkdir -p $(shell dirname $@)
+	@mkdir -p $(shell dirname $@)
 	sed 's/ARCH/i386/' < $^ > $@
 
+.SECONDARY: build/amd64/control
 build/amd64/control: control
-	mkdir -p $(shell dirname $@)
+	@mkdir -p $(shell dirname $@)
 	sed 's/ARCH/amd64/' < $^ > $@
 
-build/%/data.tar.gz: build/%/data/usr/bin/elm
-	tar czf $@ -C $(shell dirname $@)/data usr
+.SECONDARY: build/%/data.tar.gz
+build/%/data.tar.gz: build/%/usr/bin/elm
+	@mkdir -p $(shell dirname $@)
+	tar czf $@ -C $(shell dirname $@) usr
 
+.SECONDARY: build/%/control.tar.gz
 build/%/control.tar.gz: build/%/control
+	@mkdir -p $(shell dirname $@)
 	tar czf $@ -C $(shell dirname $@) control
 
+.SECONDARY: build/%/debian-binary
 build/%/debian-binary:
+	@mkdir -p $(shell dirname $@)
 	echo 2.0 > $@
 
-build/elm_0.19-1-%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
+output/elm_0.19-1-%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
+	@mkdir -p $(shell dirname $@)
 	ar r $@ $^
+
+.PHONY: clean
+clean:
+	rm -rf build
