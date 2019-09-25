@@ -13,13 +13,18 @@ all: output/elm_0.19-1-i386.deb output/elm_0.19-1-amd64.deb
 orig/amd64.gz:
 	@mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN64V19} -o $@
+	@# This checks the SHA256 hash of the file.
+	@# If it's not correct, the file is corrupt, so we just delete it
 	sha256sum --check amd64.sha256sum || rm $@
 
 orig/i386.gz:
 	@mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN32V19} -o $@
+	@# This checks the SHA256 hash of the file.
+	@# If it's not correct, the file is corrupt, so we just delete it
 	sha256sum --check i386.sha256sum || rm $@
 
+# .PRECIOUS means that make should keep the intermediate file
 .PRECIOUS: build/%/usr/bin/elm
 build/%/usr/bin/elm: orig/%.gz
 	@mkdir -p $(shell dirname $@)
@@ -39,14 +44,18 @@ build/amd64/control: control
 .PRECIOUS: build/%/data.tar
 build/%/data.tar: build/%/usr/bin/elm
 	@mkdir -p $(shell dirname $@)
+	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
 	find $(shell dirname $@) -exec touch -t ${RELEASE_DATE} {} \;
-	tar --sort=name -cf $@ -C $(shell dirname $@) usr
+	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
+	tar --sort=name --owner=0 --group=0 -cf $@ -C $(shell dirname $@) usr
 
 .PRECIOUS: build/%/control.tar
 build/%/control.tar: build/%/control
 	@mkdir -p $(shell dirname $@)
+	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
 	find $(shell dirname $@) -exec touch -t ${RELEASE_DATE} {} \;
-	tar --sort=name -cf $@ -C $(shell dirname $@) control
+	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
+	tar --sort=name --owner=0 --group=0 -cf $@ -C $(shell dirname $@) control
 
 .PRECIOUS: %.tar.gz
 %.tar.gz: %.tar
@@ -59,6 +68,7 @@ build/%/debian-binary:
 
 output/elm_0.19-1-%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
 	@mkdir -p $(shell dirname $@)
+	@# D stands for deterministic
 	ar Dr $@ $^
 
 .PHONY: clean
