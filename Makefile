@@ -6,71 +6,95 @@ LIN32V19="https://github.com/elm/compiler/releases/download/0.19.0/binaries-for-
 SHA32="7a82bbf34955960d9806417f300e7b2f8d426933c09863797fe83b67063e0139"
 
 RELEASE_DATE="201808211146"
+RELEASE_DATE_HUMAN=$(shell TZ=UTC LANG=C date -d 2018-08-21T11:46:00)
 
 .PHONY: all
-all: output/elm_0.19-1-i386.deb output/elm_0.19-1-amd64.deb
+all: output/dists/stable/InRelease output/pubkey.gpg
+	@echo ">>> sudo apt-key add output/pubkey.gpg <<<"
+	@echo ">>> echo "deb http:/.../ stable main" | sudo tee /etc/apt/sources.list.d/elm.list <<<"
+
+# .SECONDARY means that make should keep the intermediate file
+.SECONDARY:
 
 orig/amd64.gz:
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN64V19} -o $@
 	@# This checks the SHA256 hash of the file.
 	@# If it's not correct, the file is corrupt, so we just delete it
 	sha256sum --check amd64.sha256sum || rm $@
 
 orig/i386.gz:
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	curl -sSL ${LIN32V19} -o $@
 	@# This checks the SHA256 hash of the file.
 	@# If it's not correct, the file is corrupt, so we just delete it
 	sha256sum --check i386.sha256sum || rm $@
 
-# .PRECIOUS means that make should keep the intermediate file
-.PRECIOUS: build/%/usr/bin/elm
 build/%/usr/bin/elm: orig/%.gz
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	gunzip < $^ > $@
 	chmod +x $@
 
-.PRECIOUS: build/i386/control
-build/i386/control: control
-	@mkdir -p $(shell dirname $@)
-	sed 's/ARCH/i386/' < $^ > $@
+build/%/control: control
+	mkdir -p $(shell dirname $@)
+	sed 's/ARCH/$*/' < $^ > $@
 
-.PRECIOUS: build/amd64/control
-build/amd64/control: control
-	@mkdir -p $(shell dirname $@)
-	sed 's/ARCH/amd64/' < $^ > $@
-
-.PRECIOUS: build/%/data.tar
 build/%/data.tar: build/%/usr/bin/elm
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
-	find $(shell dirname $@) -exec touch -t ${RELEASE_DATE} {} \;
+	find build/$* -exec touch -t ${RELEASE_DATE} {} \;
 	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
-	tar --sort=name --owner=0 --group=0 -cf $@ -C $(shell dirname $@) usr
+	tar --sort=name --owner=0 --group=0 -cf $@ -C build/$* usr
 
-.PRECIOUS: build/%/control.tar
 build/%/control.tar: build/%/control
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
-	find $(shell dirname $@) -exec touch -t ${RELEASE_DATE} {} \;
+	find build/$* -exec touch -t ${RELEASE_DATE} {} \;
 	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
-	tar --sort=name --owner=0 --group=0 -cf $@ -C $(shell dirname $@) control
+	tar --sort=name --owner=0 --group=0 -cf $@ -C build/$* control
 
-.PRECIOUS: %.tar.gz
-%.tar.gz: %.tar
+%.gz: %
 	gzip -n < $^ > $@
 
-.PRECIOUS: build/%/debian-binary
 build/%/debian-binary:
-	@mkdir -p $(shell dirname $@)
+	mkdir -p $(shell dirname $@)
 	echo 2.0 > $@
 
-output/elm_0.19-1-%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
-	@mkdir -p $(shell dirname $@)
+output/pool/main/e/elm/elm_0.19-1_%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
+	mkdir -p $(shell dirname $@)
 	@# D stands for deterministic
-	ar Dr $@ $^
+	ar Dr $@ $^ 2> /dev/null
 
 .PHONY: clean
 clean:
 	rm -rf build output
+
+build/%/Packages: build/%/control output/pool/main/e/elm/elm_0.19-1_%.deb
+	mkdir -p $(shell dirname $@)
+	cat build/$*/control > $@
+	echo "Filename: pool/main/e/elm/elm_0.19-1_$*.deb" >> $@
+	echo "Size: $(shell du -b output/pool/main/e/elm/elm_0.19-1_$*.deb | cut -f1)" >> $@
+	echo "SHA256: $(shell sha256sum output/pool/main/e/elm/elm_0.19-1_$*.deb | cut -d' ' -f1)" >> $@
+
+output/dists/stable/main/binary-%/Packages.gz: build/%/Packages
+	mkdir -p $(shell dirname $@)
+	gzip -n < $^ > $@
+
+output/dists/stable/Release: output/dists/stable/main/binary-amd64/Packages.gz output/dists/stable/main/binary-i386/Packages.gz
+	mkdir -p $(shell dirname $@)
+	echo "Origin: Elm" > $@
+	echo "Suite: stable" >> $@
+	echo "Version: 0.19" >> $@
+	echo "Date: ${RELEASE_DATE_HUMAN}" >> $@
+	echo "Architectures: amd64 i386" >> $@
+	echo "Components: main" >> $@
+	echo "Description: Elm 0.19" >> $@
+	echo "SHA256:" >> $@
+	echo " $(shell sha256sum output/dists/stable/main/binary-amd64/Packages.gz | cut -d' ' -f1) $(shell du -b output/dists/stable/main/binary-amd64/Packages.gz | cut -f1) main/binary-amd64/Packages.gz" >> $@
+	echo " $(shell sha256sum output/dists/stable/main/binary-i386/Packages.gz | cut -d' ' -f1) $(shell du -b output/dists/stable/main/binary-i386/Packages.gz| cut -f1) main/binary-i386/Packages.gz" >> $@
+
+output/dists/stable/InRelease: output/dists/stable/Release
+	gpg -a -s --clearsig < $^ > $@
+
+output/pubkey.gpg:
+	gpg --output $@ --export --armor
