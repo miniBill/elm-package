@@ -6,7 +6,7 @@ LIN32V19="https://github.com/elm/compiler/releases/download/0.19.0/binaries-for-
 SHA32="7a82bbf34955960d9806417f300e7b2f8d426933c09863797fe83b67063e0139"
 
 RELEASE_DATE="201808211146"
-RELEASE_DATE_HUMAN=$(shell TZ=UTC LANG=C date -d 2018-08-21T11:46:00)
+RELEASE_DATE_HUMAN=$(shell TZ=UTC LANG=C date -R -u -d 2018-08-21T11:46:00)
 
 .PHONY: all
 all: output/dists/stable/InRelease output/pubkey.gpg
@@ -94,7 +94,9 @@ output/dists/stable/Release: output/dists/stable/main/binary-amd64/Packages.gz o
 	echo " $(shell sha256sum output/dists/stable/main/binary-i386/Packages.gz | cut -d' ' -f1) $(shell du -b output/dists/stable/main/binary-i386/Packages.gz| cut -f1) main/binary-i386/Packages.gz" >> $@
 
 output/dists/stable/InRelease: output/dists/stable/Release
+	mkdir -p $(shell dirname $@)
 	gpg -a -s --clearsig < $^ > $@
 
 output/pubkey.gpg:
+	mkdir -p $(shell dirname $@)
 	gpg --output $@ --export --armor
