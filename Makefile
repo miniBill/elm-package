@@ -9,9 +9,9 @@ RELEASE_DATE="201808211146"
 RELEASE_DATE_HUMAN=$(shell TZ=UTC LANG=C date -R -u -d 2018-08-21T11:46:00)
 
 .PHONY: all
-all: output/dists/stable/InRelease output/pubkey.gpg
+all: output/debian/InRelease output/pubkey.gpg
 	@echo ">>> sudo apt-key add output/pubkey.gpg <<<"
-	@echo ">>> echo "deb http:/.../ stable main" | sudo tee /etc/apt/sources.list.d/elm.list <<<"
+	@echo ">>> echo "deb http:/.../debian/ ./" | sudo tee /etc/apt/sources.list.d/elm.list <<<"
 
 # .SECONDARY means that make should keep the intermediate file
 .SECONDARY:
@@ -56,11 +56,11 @@ build/%/control.tar: build/%/control
 %.gz: %
 	gzip -n < $^ > $@
 
-build/%/debian-binary:
+build/debian-binary:
 	mkdir -p $(shell dirname $@)
 	echo 2.0 > $@
 
-output/pool/main/e/elm/elm_0.19-1_%.deb: build/%/debian-binary build/%/control.tar.gz build/%/data.tar.gz
+output/debian/elm_0.19-1_%.deb: build/debian-binary build/%/control.tar.gz build/%/data.tar.gz
 	mkdir -p $(shell dirname $@)
 	@# D stands for deterministic
 	ar Dr $@ $^ 2> /dev/null
@@ -69,31 +69,37 @@ output/pool/main/e/elm/elm_0.19-1_%.deb: build/%/debian-binary build/%/control.t
 clean:
 	rm -rf build output
 
-build/%/Packages: build/%/control output/pool/main/e/elm/elm_0.19-1_%.deb
+output/debian/Packages: build/i386/control output/debian/elm_0.19-1_i386.deb build/amd64/control output/debian/elm_0.19-1_amd64.deb
 	mkdir -p $(shell dirname $@)
-	cat build/$*/control > $@
-	echo "Filename: pool/main/e/elm/elm_0.19-1_$*.deb" >> $@
-	echo "Size: $(shell du -b output/pool/main/e/elm/elm_0.19-1_$*.deb | cut -f1)" >> $@
-	echo "SHA256: $(shell sha256sum output/pool/main/e/elm/elm_0.19-1_$*.deb | cut -d' ' -f1)" >> $@
 
-output/dists/stable/main/binary-%/Packages.gz: build/%/Packages
+	cat build/i386/control > $@
+	echo "Filename: elm_0.19-1_i386.deb" >> $@
+	echo "Size: $(shell du -b output/debian/elm_0.19-1_i386.deb | cut -f1)" >> $@
+	echo "SHA256: $(shell sha256sum output/debian/elm_0.19-1_i386.deb | cut -d' ' -f1)" >> $@
+
+	echo "" > $@
+
+	cat build/amd64/control > $@
+	echo "Filename: elm_0.19-1_amd64.deb" >> $@
+	echo "Size: $(shell du -b output/debian/elm_0.19-1_amd64.deb | cut -f1)" >> $@
+	echo "SHA256: $(shell sha256sum output/debian/elm_0.19-1_amd64.deb | cut -d' ' -f1)" >> $@
+
+output/debian/Packages.gz: output/debian/Packages
 	mkdir -p $(shell dirname $@)
 	gzip -n < $^ > $@
 
-output/dists/stable/Release: output/dists/stable/main/binary-amd64/Packages.gz output/dists/stable/main/binary-i386/Packages.gz
+build/Release: output/debian/Packages output/debian/Packages.gz
 	mkdir -p $(shell dirname $@)
 	echo "Origin: Elm" > $@
-	echo "Suite: stable" >> $@
 	echo "Version: 0.19" >> $@
 	echo "Date: ${RELEASE_DATE_HUMAN}" >> $@
 	echo "Architectures: amd64 i386" >> $@
-	echo "Components: main" >> $@
 	echo "Description: Elm 0.19" >> $@
 	echo "SHA256:" >> $@
-	echo " $(shell sha256sum output/dists/stable/main/binary-amd64/Packages.gz | cut -d' ' -f1) $(shell du -b output/dists/stable/main/binary-amd64/Packages.gz | cut -f1) main/binary-amd64/Packages.gz" >> $@
-	echo " $(shell sha256sum output/dists/stable/main/binary-i386/Packages.gz | cut -d' ' -f1) $(shell du -b output/dists/stable/main/binary-i386/Packages.gz| cut -f1) main/binary-i386/Packages.gz" >> $@
+	echo " $(shell sha256sum output/debian/Packages | cut -d' ' -f1) $(shell du -b output/debian/Packages | cut -f1) Packages" >> $@
+	echo " $(shell sha256sum output/debian/Packages.gz | cut -d' ' -f1) $(shell du -b output/debian/Packages.gz | cut -f1) Packages.gz" >> $@
 
-output/dists/stable/InRelease: output/dists/stable/Release
+output/debian/InRelease: build/Release
 	mkdir -p $(shell dirname $@)
 	gpg -a -s --clearsig < $^ > $@
 
