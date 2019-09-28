@@ -1,66 +1,71 @@
+URL_FOR_elm_0.19.0-1_i386.gz := "https://github.com/elm/compiler/releases/download/0.19.0/binaries-for-linux.tar.gz"
+DATE_FOR_elm_0.19.0-1_i386 := "2018-08-21T11:46:00Z"
 
-LIN64V19="https://github.com/elm/compiler/releases/download/0.19.0/binary-for-linux-64-bit.gz"
-SHA64="d359adbee89823c641cda326938708d7227dc79aa1f162e0d8fe275f182f528a"
+URL_FOR_elm_0.19.0-1_amd64.gz := "https://github.com/elm/compiler/releases/download/0.19.0/binary-for-linux-64-bit.gz"
+DATE_FOR_elm_0.19.0-1_amd64 := "2018-08-21T11:46:00Z"
 
-LIN32V19="https://github.com/elm/compiler/releases/download/0.19.0/binaries-for-linux.tar.gz"
-SHA32="7a82bbf34955960d9806417f300e7b2f8d426933c09863797fe83b67063e0139"
+URL_FOR_elm-format_0.8.2-1_amd64.tgz="https://github.com/avh4/elm-format/releases/download/0.8.2/elm-format-0.8.2-linux-x64.tgz"
+DATE_FOR_elm-format_0.8.2-1_amd64="2019-08-09T06:05:00Z"
 
-RELEASE_DATE="201808211146"
-RELEASE_DATE_HUMAN=$(shell TZ=UTC LANG=C date -R -u -d 2018-08-21T11:46:00)
+PACKAGES=elm_0.19.0-1_i386 elm_0.19.0-1_amd64 elm-format_0.8.2-1_amd64
+
+RELEASE_DATE=$(shell TZ=UTC LANG=C date -R -u -d $(DATE_FOR_elm-format_0.8.2-1_amd64))
 
 .PHONY: all
-all: output/debian/InRelease output/pubkey.gpg
+all: output/debian/Packages output/debian/Packages.gz output/debian/InRelease output/pubkey.gpg $(foreach PACKAGE,$(PACKAGES),output/debian/$(PACKAGE).deb)
 	@echo ">>> sudo apt-key add output/pubkey.gpg <<<"
 	@echo ">>> echo "deb http:/.../debian/ ./" | sudo tee /etc/apt/sources.list.d/elm.list <<<"
+	@echo ">>> sudo apt install elm elm-format <<<"
 
-# .SECONDARY means that make should keep the intermediate file
+# .SECONDARY means that make should keep the intermediate files
 .SECONDARY:
 
-orig/amd64.gz:
+# Download and check SHA256
+orig/%:
 	mkdir -p $(shell dirname $@)
-	curl -sSL ${LIN64V19} -o $@
+	curl -sSL $(URL_FOR_$*) -o $@
 	@# This checks the SHA256 hash of the file.
 	@# If it's not correct, the file is corrupt, so we just delete it
-	sha256sum --check amd64.sha256sum || rm $@
-
-orig/i386.gz:
-	mkdir -p $(shell dirname $@)
-	curl -sSL ${LIN32V19} -o $@
-	@# This checks the SHA256 hash of the file.
-	@# If it's not correct, the file is corrupt, so we just delete it
-	sha256sum --check i386.sha256sum || rm $@
+	sha256sum --check checksums/$*.sha256sum || rm $@
 
 build/%/usr/bin/elm: orig/%.gz
 	mkdir -p $(shell dirname $@)
-	gunzip < $^ > $@
+	pigz -d < $^ > $@
 	chmod +x $@
 
-build/%/control: control
+build/%/usr/bin/elm-format: orig/%.tgz
 	mkdir -p $(shell dirname $@)
-	sed 's/ARCH/$*/' < $^ > $@
+	tar xf $^ -C $(shell dirname $@)
+	chmod +x $@
 
-build/%/data.tar: build/%/usr/bin/elm
+build/%/control: src/%/control
 	mkdir -p $(shell dirname $@)
-	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
-	find build/$* -exec touch -t ${RELEASE_DATE} {} \;
+	cp $^ $@
+
+build/elm_%/data.tar: build/elm_%/usr/bin/elm
+	mkdir -p $(shell dirname $@)
 	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
-	tar --sort=name --owner=0 --group=0 -cf $@ -C build/$* usr
+	tar --sort=name --mtime=$(DATE_FOR_elm_$*) --owner=0 --group=0 --numeric-owner -cf $@ -C build/elm_$* usr
+
+build/elm-format_%/data.tar: build/elm-format_%/usr/bin/elm-format
+	mkdir -p $(shell dirname $@)
+	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
+	tar --sort=name --mtime=$(DATE_FOR_elm_format_$*) --owner=0 --group=0 --numeric-owner -cf $@ -C build/elm-format_$* usr
 
 build/%/control.tar: build/%/control
 	mkdir -p $(shell dirname $@)
-	@# find+touch is required to make the build deterministic (otherwise tar stores the actual mtime)
-	find build/$* -exec touch -t ${RELEASE_DATE} {} \;
 	@# --sort=name is required to make the build deterministic (otherwise tar uses directory order)
-	tar --sort=name --owner=0 --group=0 -cf $@ -C build/$* control
+	tar --sort=name --mtime=$(DATE_FOR_$*) --owner=0 --group=0 --numeric-owner -cf $@ -C build/$* control
 
 %.gz: %
-	gzip -n < $^ > $@
+	mkdir -p $(shell dirname $@)
+	pigz -9 -n < $^ > $@
 
 build/debian-binary:
 	mkdir -p $(shell dirname $@)
 	echo 2.0 > $@
 
-output/debian/elm_0.19-1_%.deb: build/debian-binary build/%/control.tar.gz build/%/data.tar.gz
+output/debian/%.deb: build/debian-binary build/%/control.tar.gz build/%/data.tar.gz
 	mkdir -p $(shell dirname $@)
 	@# D stands for deterministic
 	ar Dr $@ $^ 2> /dev/null
@@ -69,32 +74,26 @@ output/debian/elm_0.19-1_%.deb: build/debian-binary build/%/control.tar.gz build
 clean:
 	rm -rf build output
 
-output/debian/Packages: build/i386/control output/debian/elm_0.19-1_i386.deb build/amd64/control output/debian/elm_0.19-1_amd64.deb
+define packageInfo
+echo "" >> $@
+cat build/$(1)/control >> $@
+echo "Filename: $(1).deb" >> $@
+echo "Size: $(shell du -b output/debian/$(1).deb | cut -f1)" >> $@
+echo "SHA256: $(shell sha256sum output/debian/$(1).deb | cut -d' ' -f1)" >> $@
+
+endef
+
+output/debian/Packages: $(foreach PACKAGE,$(PACKAGES), build/$(PACKAGE)/control output/debian/${PACKAGE}.deb)
 	mkdir -p $(shell dirname $@)
-
-	cat build/i386/control > $@
-	echo "Filename: elm_0.19-1_i386.deb" >> $@
-	echo "Size: $(shell du -b output/debian/elm_0.19-1_i386.deb | cut -f1)" >> $@
-	echo "SHA256: $(shell sha256sum output/debian/elm_0.19-1_i386.deb | cut -d' ' -f1)" >> $@
-
-	echo "" > $@
-
-	cat build/amd64/control > $@
-	echo "Filename: elm_0.19-1_amd64.deb" >> $@
-	echo "Size: $(shell du -b output/debian/elm_0.19-1_amd64.deb | cut -f1)" >> $@
-	echo "SHA256: $(shell sha256sum output/debian/elm_0.19-1_amd64.deb | cut -d' ' -f1)" >> $@
-
-output/debian/Packages.gz: output/debian/Packages
-	mkdir -p $(shell dirname $@)
-	gzip -n < $^ > $@
+	truncate -s 0 $@
+	$(foreach PACKAGE,$(PACKAGES),$(call packageInfo,$(PACKAGE)))
 
 build/Release: output/debian/Packages output/debian/Packages.gz
 	mkdir -p $(shell dirname $@)
 	echo "Origin: Elm" > $@
-	echo "Version: 0.19" >> $@
-	echo "Date: ${RELEASE_DATE_HUMAN}" >> $@
+	echo "Date: $(RELEASE_DATE)" >> $@
 	echo "Architectures: amd64 i386" >> $@
-	echo "Description: Elm 0.19" >> $@
+	echo "Description: Elm and related utilities" >> $@
 	echo "SHA256:" >> $@
 	echo " $(shell sha256sum output/debian/Packages | cut -d' ' -f1) $(shell du -b output/debian/Packages | cut -f1) Packages" >> $@
 	echo " $(shell sha256sum output/debian/Packages.gz | cut -d' ' -f1) $(shell du -b output/debian/Packages.gz | cut -f1) Packages.gz" >> $@

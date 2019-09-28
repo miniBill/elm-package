@@ -1,0 +1,8 @@
+Package: elm-format
+Version: 0.8.2-1
+Architecture: amd64
+Maintainer: Leonardo Taglialegne <cmt.miniBill@gmail.com>
+Description: elm-format formats Elm source code according to a standard set of rules based on the official Elm Style Guide.
+Section: web
+Priority: optional
+Homepage: https://github.com/avh4/elm-format
