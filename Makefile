@@ -4,12 +4,15 @@ DATE_FOR_elm_0.19.0-1_i386 := "2018-08-21T11:46:00Z"
 URL_FOR_elm_0.19.0-1_amd64.gz := "https://github.com/elm/compiler/releases/download/0.19.0/binary-for-linux-64-bit.gz"
 DATE_FOR_elm_0.19.0-1_amd64 := "2018-08-21T11:46:00Z"
 
+URL_FOR_elm_0.19.1-1_amd64.gz := "https://github.com/elm/compiler/releases/download/0.19.1/binary-for-linux-64-bit.gz"
+DATE_FOR_elm_0.19.1-1_amd64 := "2019-10-21T12:12:00Z"
+
 URL_FOR_elm-format_0.8.2-1_amd64.tgz="https://github.com/avh4/elm-format/releases/download/0.8.2/elm-format-0.8.2-linux-x64.tgz"
 DATE_FOR_elm-format_0.8.2-1_amd64="2019-08-09T06:05:00Z"
 
-PACKAGES=elm_0.19.0-1_i386 elm_0.19.0-1_amd64 elm-format_0.8.2-1_amd64
+PACKAGES=elm_0.19.0-1_i386 elm_0.19.0-1_amd64 elm_0.19.1-1_amd64 elm-format_0.8.2-1_amd64
 
-RELEASE_DATE=$(shell TZ=UTC LANG=C date -R -u -d $(DATE_FOR_elm-format_0.8.2-1_amd64))
+RELEASE_DATE=$(shell TZ=UTC LANG=C date -R -u -d $(DATE_FOR_elm_0.19.1-1_amd64))
 
 .PHONY: all
 all: output/debian/Packages output/debian/Packages.gz output/debian/InRelease output/pubkey.gpg $(foreach PACKAGE,$(PACKAGES),output/debian/$(PACKAGE).deb)

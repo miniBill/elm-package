@@ -11,7 +11,7 @@ The process will put:
   * `pubkey.gpg`: this is the key used to sign the repository,
   * `debian`: this folder is a valid Debian repository.
 
-# Repository usage #
+# Repository usage - Debian, Ubuntu, derivatives #
 To test the resulting repository locally, just add it:
 ```
 sudo apt-key add output/pubkey.gpg

@@ -1,0 +1,8 @@
+Package: elm
+Version: 0.19.1-1
+Architecture: amd64
+Maintainer: Leonardo Taglialegne <cmt.miniBill@gmail.com>
+Description: A delightful language for reliable webapps.
+Section: web
+Priority: optional
+Homepage: https://elm-lang.org
